@@ -1,5 +1,5 @@
 // Service worker: permite usar la app sin internet una vez instalada.
-const CACHE = 'carros-lavados-v1';
+const CACHE = 'carros-lavados-v2';
 const FILES = ['./', './index.html', './styles.css', './app.js', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', e => {
@@ -13,6 +13,8 @@ self.addEventListener('activate', e => {
 // Red primero (para recibir actualizaciones), caché si no hay conexión.
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  // Solo archivos de la propia app (nunca guardar en caché las respuestas de Google Drive)
+  if (new URL(e.request.url).origin !== self.location.origin) return;
   e.respondWith(
     fetch(e.request)
       .then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return res; })

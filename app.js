@@ -5,7 +5,8 @@
   'use strict';
 
   const STORAGE_KEY = 'carros-lavados.v1';
-  const DEFAULTS = { pct: 25, weekStart: 1, currency: '$' };
+  const DRIVE_KEY = 'carros-lavados.drive';
+  const DEFAULTS = { pct: 25, weekStart: 1, currency: '$', driveUrl: '', driveSecret: '' };
   const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
     'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -26,9 +27,134 @@
     } catch (e) { /* datos corruptos o storage bloqueado */ }
     return { settings: { ...DEFAULTS }, entries: [] };
   }
-  function save() {
+  // backup=false para cambios que no deben subirse a Drive (p. ej. configurar el enlace)
+  function save(backup = true) {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
     catch (e) { toast('⚠️ No se pudo guardar en este navegador'); }
+    if (backup && driveOn()) { drive.dirty = true; saveDrive(); scheduleDrive(); renderDriveStatus(); }
+  }
+
+  // ---------- Respaldo automático en Google Drive (vía Google Apps Script) ----------
+  let drive = loadDrive();
+  let driveTimer = null, driveBusy = false;
+
+  function loadDrive() {
+    const base = { dirty: false, lastOk: null, lastCount: 0, lastError: null };
+    try { return { ...base, ...JSON.parse(localStorage.getItem(DRIVE_KEY)) }; } catch (e) { return base; }
+  }
+  function saveDrive() { try { localStorage.setItem(DRIVE_KEY, JSON.stringify(drive)); } catch (e) { /* nada */ } }
+  function driveOn() { return !!(state.settings.driveUrl && state.settings.driveSecret); }
+  function backupPayload() {
+    const { driveUrl, driveSecret, ...settings } = state.settings; // la clave no viaja dentro del respaldo
+    return { settings, entries: state.entries, exportedAt: new Date().toISOString() };
+  }
+  function driveErrorText(err, out) {
+    if (out && out.error === 'clave') return 'La clave no coincide con la del script';
+    if (out && out.error) return out.error;
+    if (err instanceof SyntaxError) return 'El enlace no responde bien (¿termina en /exec y el acceso es "Cualquier usuario"?)';
+    return 'Sin conexión o enlace incorrecto';
+  }
+  async function driveCall(method, body, keepalive = false) {
+    const s = state.settings;
+    const url = method === 'GET'
+      ? s.driveUrl + (s.driveUrl.includes('?') ? '&' : '?') + 'secret=' + encodeURIComponent(s.driveSecret)
+      : s.driveUrl;
+    // Sin cabeceras personalizadas → petición "simple" (text/plain), que Apps Script acepta sin CORS preflight.
+    const res = await fetch(url, method === 'GET' ? {} : { method: 'POST', body, keepalive });
+    let out;
+    try { out = await res.json(); } catch (e) { throw new Error(driveErrorText(e)); }
+    if (!out.ok) throw new Error(driveErrorText(null, out));
+    return out;
+  }
+  function scheduleDrive(delay = 2500) {
+    if (!driveOn()) return;
+    clearTimeout(driveTimer);
+    driveTimer = setTimeout(() => { driveTimer = null; backupToDrive(); }, delay);
+  }
+  async function backupToDrive(manual = false, keepalive = false) {
+    if (!driveOn()) { if (manual) toast('Primero conecta tu Google Drive'); return; }
+    // Nunca pisar el respaldo de Drive con una lista vacía de forma automática
+    if (!state.entries.length && !manual) { drive.dirty = false; saveDrive(); renderDriveStatus(); return; }
+    if (driveBusy) { scheduleDrive(3000); return; }
+    if (!manual && navigator.onLine === false) { renderDriveStatus(); return; }
+    driveBusy = true; drive.dirty = false;
+    renderDriveStatus('⏳ Respaldando…');
+    try {
+      const body = JSON.stringify({ secret: state.settings.driveSecret, day: todayStr(), data: backupPayload() });
+      const out = await driveCall('POST', body, keepalive && body.length < 60000);
+      drive.lastOk = out.savedAt || new Date().toISOString();
+      drive.lastCount = out.count; drive.lastError = null;
+      if (manual) toast('☁️ Respaldo guardado en Drive');
+    } catch (err) {
+      drive.dirty = true; drive.lastError = err.message;
+      if (manual) toast('⚠️ ' + err.message);
+    } finally {
+      driveBusy = false; saveDrive(); renderDriveStatus();
+    }
+  }
+  function niceDateTime(iso) {
+    const d = new Date(iso);
+    const day = toStr(d) === todayStr() ? 'hoy' : toStr(d) === addDays(todayStr(), -1) ? 'ayer' : shortDate(toStr(d));
+    return `${day} ${d.toLocaleTimeString('es', { hour: 'numeric', minute: '2-digit' })}`;
+  }
+  function renderDriveStatus(busyText) {
+    const el = $('drive-status');
+    $('drive-actions').classList.toggle('hidden', !driveOn());
+    let text, cls = '';
+    if (!driveOn()) text = 'Respaldo automático desactivado.';
+    else if (busyText) text = busyText;
+    else if (drive.lastError) {
+      text = `⚠️ ${drive.lastError}. Se reintentará solo.` + (drive.lastOk ? ` Último respaldo bueno: ${niceDateTime(drive.lastOk)}.` : '');
+      cls = 'err';
+    } else if (drive.dirty) text = '⏳ Hay cambios pendientes de respaldar (se envían al tener internet).';
+    else if (drive.lastOk) { text = `✅ Último respaldo: ${niceDateTime(drive.lastOk)} (${drive.lastCount} carros)`; cls = 'ok'; }
+    else text = 'Conectado. Aún no hay respaldos.';
+    el.textContent = text;
+    el.className = 'drive-status small ' + cls;
+    renderHeader();
+  }
+  function renderHeader() {
+    let icon = '';
+    if (driveOn()) icon = drive.lastError ? ' · ☁️⚠️' : drive.dirty ? ' · ☁️⏳' : ' · ☁️✓';
+    $('today-label').textContent = `Mi %: ${state.settings.pct}%${icon}`;
+  }
+  async function connectDrive(ev) {
+    ev.preventDefault();
+    const url = $('d-url').value.trim(), secret = $('d-secret').value.trim();
+    if (!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(url)) { alert('El enlace debe ser el de tu Apps Script (https://script.google.com/…/exec).'); return; }
+    if (!secret) { alert('Escribe la clave secreta que pusiste en el script.'); return; }
+    state.settings.driveUrl = url; state.settings.driveSecret = secret;
+    drive = { dirty: false, lastOk: null, lastCount: 0, lastError: null };
+    save(false); saveDrive();
+    renderDriveStatus('⏳ Conectando con tu Drive…');
+    try {
+      const remote = await driveCall('GET');
+      // Si Drive tiene más carros que este teléfono (teléfono nuevo / datos borrados), ofrecer restaurar
+      if (remote.data && remote.count > state.entries.length &&
+          confirm(`Tu Drive tiene un respaldo con ${remote.count} carros (este teléfono tiene ${state.entries.length}).\n¿Restaurarlo en este teléfono?`)) {
+        applyBackup(remote.data, false);
+        drive.lastOk = remote.savedAt; drive.lastCount = remote.count;
+        saveDrive(); renderDriveStatus(); toast('✅ Datos restaurados desde Drive');
+        return;
+      }
+      toast('✅ Conectado a Google Drive');
+      if (state.entries.length) await backupToDrive(true);
+      else renderDriveStatus();
+    } catch (err) {
+      drive.lastError = err.message; saveDrive(); renderDriveStatus();
+      alert('No se pudo conectar: ' + err.message);
+    }
+  }
+  async function restoreFromDrive() {
+    renderDriveStatus('⏳ Buscando respaldo en Drive…');
+    try {
+      const remote = await driveCall('GET');
+      renderDriveStatus();
+      if (!remote.data) { alert('Todavía no hay respaldos en tu Drive.'); return; }
+      if (!confirm(`Respaldo de Drive del ${niceDateTime(remote.savedAt)} con ${remote.count} carros.\nEste teléfono tiene ${state.entries.length}.\n¿Reemplazar los datos de este teléfono?`)) return;
+      applyBackup(remote.data, false);
+      toast('✅ Datos restaurados desde Drive');
+    } catch (err) { renderDriveStatus(); alert('No se pudo restaurar: ' + err.message); }
   }
 
   // ---------- Fechas (siempre en hora local, formato YYYY-MM-DD) ----------
@@ -283,10 +409,13 @@
     $('s-weekstart').value = state.settings.weekStart;
     $('s-currency').value = state.settings.currency;
     $('s-apply-all').checked = false;
+    $('d-url').value = state.settings.driveUrl;
+    $('d-secret').value = state.settings.driveSecret;
+    renderDriveStatus();
   }
 
   function renderAll() {
-    $('today-label').textContent = `Mi %: ${state.settings.pct}%`;
+    renderHeader();
     renderDay(); renderWeek(); renderMonth(); renderChips(); updatePreview();
   }
 
@@ -308,6 +437,15 @@
   function exportJSON() {
     download(`respaldo-carros-${todayStr()}.json`, JSON.stringify(state, null, 2), 'application/json');
   }
+  // Reemplaza los datos por los de un respaldo, conservando la conexión a Drive de este teléfono.
+  function applyBackup(data, backup) {
+    const cur = state.settings, old = data.settings || {};
+    state = {
+      settings: { ...DEFAULTS, ...old, driveUrl: cur.driveUrl || old.driveUrl || '', driveSecret: cur.driveSecret || old.driveSecret || '' },
+      entries: data.entries,
+    };
+    save(backup); renderSettings(); renderAll();
+  }
   function importJSON(file) {
     const reader = new FileReader();
     reader.onload = () => {
@@ -315,8 +453,7 @@
         const data = JSON.parse(reader.result);
         if (!Array.isArray(data.entries)) throw new Error('formato');
         if (!confirm(`El respaldo tiene ${data.entries.length} carros. ¿Reemplazar los datos actuales?`)) return;
-        state = { settings: { ...DEFAULTS, ...data.settings }, entries: data.entries };
-        save(); renderSettings(); renderAll(); toast('✅ Respaldo restaurado');
+        applyBackup(data, true); toast('✅ Respaldo restaurado');
       } catch (e) { alert('El archivo no es un respaldo válido.'); }
     };
     reader.readAsText(file);
@@ -389,6 +526,28 @@
       state.entries = []; save(); renderAll(); toast('Datos borrados');
     };
 
+    // Google Drive
+    $('drive-form').addEventListener('submit', connectDrive);
+    $('drive-now').onclick = () => {
+      if (!state.entries.length && !confirm('No hay carros en este teléfono. ¿Enviar un respaldo vacío a Drive?')) return;
+      backupToDrive(true);
+    };
+    $('drive-restore').onclick = restoreFromDrive;
+    $('drive-off').onclick = () => {
+      if (!confirm('¿Desconectar el respaldo automático? Tus archivos en Drive no se borran.')) return;
+      state.settings.driveUrl = ''; state.settings.driveSecret = '';
+      drive = { dirty: false, lastOk: null, lastCount: 0, lastError: null };
+      save(false); saveDrive(); renderSettings(); toast('Respaldo automático desactivado');
+    };
+    window.addEventListener('online', () => { if (drive.dirty) scheduleDrive(1000); });
+    document.addEventListener('visibilitychange', () => {
+      if (!driveOn()) return;
+      if (document.visibilityState === 'hidden' && driveTimer) {
+        // Al cerrar o minimizar la app, enviar ya lo pendiente
+        clearTimeout(driveTimer); driveTimer = null; backupToDrive(false, true);
+      } else if (document.visibilityState === 'visible' && drive.dirty) scheduleDrive(1000);
+    });
+
     // Si la app queda abierta y cambia el día, volver a "hoy"
     let lastToday = todayStr();
     document.addEventListener('visibilitychange', () => {
@@ -404,6 +563,10 @@
   bind();
   resetForm();
   renderAll();
+  renderSettings();
+  if (drive.dirty) scheduleDrive(1500);
+  // Pedir al navegador que no borre los datos de la app por falta de espacio
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});

@@ -122,6 +122,25 @@
         <button class="btn primary" type="submit">Guardar ajustes</button>
       </form>
 
+      <form id="drive-form" class="card" autocomplete="off">
+        <h2>☁️ Respaldo automático en Google Drive</h2>
+        <p class="muted small">Cada vez que agregas, editas o borras un carro, se guarda una copia en tu Google Drive.
+          <a href="https://github.com/Luis-coder98/carros-lavados/blob/main/google-apps-script/INSTRUCCIONES.md" target="_blank" rel="noopener">Cómo configurarlo</a></p>
+        <label>Enlace del receptor (termina en /exec)
+          <input id="d-url" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec">
+        </label>
+        <label>Clave secreta
+          <input id="d-secret" type="password">
+        </label>
+        <p id="drive-status" class="drive-status small"></p>
+        <button class="btn primary" type="submit">Conectar</button>
+        <div id="drive-actions">
+          <button class="btn" type="button" id="drive-now">Respaldar ahora</button>
+          <button class="btn" type="button" id="drive-restore">Restaurar desde Drive</button>
+          <button class="btn ghost" type="button" id="drive-off">Desconectar</button>
+        </div>
+      </form>
+
       <div class="card">
         <h2>Respaldo de datos</h2>
         <p class="muted small">Los datos viven solo en este teléfono/navegador. Haz un respaldo de vez en cuando.</p>

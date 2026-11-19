@@ -89,6 +89,11 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: 0
   padding: 6px 12px; border-radius: 999px; font-size: 0.9rem; cursor: pointer;
 }
 
+a { color: var(--primary); }
+.drive-status { background: var(--bg); border-radius: 10px; padding: 10px; margin: 4px 0; }
+.drive-status.ok { color: var(--good); }
+.drive-status.err { color: var(--danger); }
+
 .preview { margin: 4px 0; font-size: 0.9rem; color: var(--good); min-height: 1.2em; }
 
 .day-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }

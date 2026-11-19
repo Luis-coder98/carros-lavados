@@ -27,7 +27,11 @@ Cada carro guarda el porcentaje con el que se registró, así que si cambias el 
 
 ## Datos
 
-Se guardan en el navegador del dispositivo (localStorage). No se comparten entre celular y computadora. Descarga un respaldo (Ajustes → Descargar respaldo) de vez en cuando.
+Se guardan en el navegador del dispositivo (localStorage). No se comparten entre celular y computadora.
+
+**Respaldo automático en Google Drive:** cada cambio se copia a la carpeta *Carros Lavados - Respaldos* de tu Drive, a través de un pequeño script de Google Apps Script. Configuración (una sola vez): [google-apps-script/INSTRUCCIONES.md](google-apps-script/INSTRUCCIONES.md).
+
+También puedes descargar un respaldo manual (Ajustes → Descargar respaldo).
 
 ## Archivos
 
