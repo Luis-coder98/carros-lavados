@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b6bcb">
+  <title>Carros Lavados</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <h1>🚗 Carros Lavados</h1>
+    <span id="today-label" class="muted"></span>
+  </header>
+
+  <main>
+    <!-- ============ HOY ============ -->
+    <section id="tab-hoy" class="tab active">
+      <form id="car-form" class="card" autocomplete="off">
+        <h2 id="form-title">Agregar carro</h2>
+        <label>Marca
+          <input id="f-brand" list="brand-list" required placeholder="Ej: Toyota">
+          <datalist id="brand-list"></datalist>
+        </label>
+        <div id="brand-chips" class="chips"></div>
+
+        <div class="row">
+          <label>Precio lavado ($)
+            <input id="f-price" type="number" inputmode="decimal" step="0.01" min="0" required placeholder="0.00">
+          </label>
+          <label>Propina ($)
+            <input id="f-tip" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">
+          </label>
+        </div>
+        <div id="price-chips" class="chips"></div>
+
+        <label>Fecha
+          <input id="f-date" type="date" required>
+        </label>
+        <label>Nota (opcional)
+          <input id="f-note" placeholder="Color, placa, tipo de lavado…">
+        </label>
+
+        <p class="preview" id="f-preview"></p>
+        <div class="row">
+          <button type="submit" class="btn primary" id="f-submit">Guardar</button>
+          <button type="button" class="btn ghost hidden" id="f-cancel">Cancelar</button>
+        </div>
+      </form>
+
+      <div class="card">
+        <div class="day-nav">
+          <button class="btn icon" id="day-prev" aria-label="Día anterior">‹</button>
+          <h2 id="day-title">Hoy</h2>
+          <button class="btn icon" id="day-next" aria-label="Día siguiente">›</button>
+        </div>
+        <div id="day-summary" class="stats"></div>
+        <ul id="day-list" class="list"></ul>
+      </div>
+    </section>
+
+    <!-- ============ SEMANA ============ -->
+    <section id="tab-semana" class="tab">
+      <div class="card">
+        <div class="day-nav">
+          <button class="btn icon" id="week-prev" aria-label="Semana anterior">‹</button>
+          <h2 id="week-title"></h2>
+          <button class="btn icon" id="week-next" aria-label="Semana siguiente">›</button>
+        </div>
+        <p class="muted center" id="week-payday"></p>
+        <div id="week-summary" class="stats"></div>
+        <table class="table" id="week-table"></table>
+        <button class="btn" id="week-share">Copiar resumen de la semana</button>
+      </div>
+    </section>
+
+    <!-- ============ MES ============ -->
+    <section id="tab-mes" class="tab">
+      <div class="card">
+        <div class="day-nav">
+          <button class="btn icon" id="month-prev" aria-label="Mes anterior">‹</button>
+          <h2 id="month-title"></h2>
+          <button class="btn icon" id="month-next" aria-label="Mes siguiente">›</button>
+        </div>
+        <div id="month-summary" class="stats"></div>
+        <h3>Por semana</h3>
+        <table class="table" id="month-weeks"></table>
+        <h3>Marcas más lavadas</h3>
+        <table class="table" id="month-brands"></table>
+        <button class="btn" id="month-share">Copiar resumen del mes</button>
+      </div>
+    </section>
+
+    <!-- ============ AJUSTES ============ -->
+    <section id="tab-ajustes" class="tab">
+      <form id="settings-form" class="card">
+        <h2>Ajustes</h2>
+        <label>Mi porcentaje del lavado (%)
+          <input id="s-pct" type="number" inputmode="decimal" step="0.1" min="0" max="100" required>
+        </label>
+        <p class="muted small">El cambio aplica a los carros nuevos. Los ya registrados conservan el % con que se guardaron (puedes editarlos uno por uno).</p>
+        <label class="check">
+          <input id="s-apply-all" type="checkbox"> Aplicar también a todos los carros ya registrados
+        </label>
+        <label>La semana de pago empieza el
+          <select id="s-weekstart">
+            <option value="1">Lunes (termina domingo)</option>
+            <option value="0">Domingo (termina sábado)</option>
+            <option value="2">Martes</option>
+            <option value="3">Miércoles</option>
+            <option value="4">Jueves</option>
+            <option value="5">Viernes</option>
+            <option value="6">Sábado</option>
+          </select>
+        </label>
+        <label>Símbolo de moneda
+          <input id="s-currency" maxlength="4">
+        </label>
+        <button class="btn primary" type="submit">Guardar ajustes</button>
+      </form>
+
+      <div class="card">
+        <h2>Respaldo de datos</h2>
+        <p class="muted small">Los datos viven solo en este teléfono/navegador. Haz un respaldo de vez en cuando.</p>
+        <button class="btn" id="export-csv">Exportar a Excel (CSV)</button>
+        <button class="btn" id="export-json">Descargar respaldo (JSON)</button>
+        <label class="btn file">Restaurar respaldo
+          <input type="file" id="import-json" accept="application/json,.json" hidden>
+        </label>
+        <button class="btn danger" id="wipe">Borrar todos los datos</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabs">
+    <button data-tab="hoy" class="active">📝<span>Hoy</span></button>
+    <button data-tab="semana">📅<span>Semana</span></button>
+    <button data-tab="mes">📊<span>Mes</span></button>
+    <button data-tab="ajustes">⚙️<span>Ajustes</span></button>
+  </nav>
+
+  <div id="toast" class="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

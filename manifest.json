@@ -1,0 +1,14 @@
+{
+  "name": "Carros Lavados",
+  "short_name": "Lavados",
+  "description": "Registro diario, semanal y mensual de carros lavados, comisión y propinas.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f5f9",
+  "theme_color": "#0b6bcb",
+  "lang": "es",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
